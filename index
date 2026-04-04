@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Project B.R.U.H. — Mission Tracker</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-app.js";
+    import { getDatabase, ref, onValue, set } from "https://www.gstatic.com/firebasejs/10.12.0/firebase-database.js";
+    const firebaseConfig = {
+      apiKey: "AIzaSyB-JrV8Qb8UcAth4ucZJfyOjf7OOJqkq1s",
+      authDomain: "bootcamp-tracker-8979e.firebaseapp.com",
+      databaseURL: "https://bootcamp-tracker-8979e-default-rtdb.firebaseio.com",
+      projectId: "bootcamp-tracker-8979e",
+      storageBucket: "bootcamp-tracker-8979e.firebasestorage.app",
+      messagingSenderId: "34384994376",
+      appId: "1:34384994376:web:586592ca9e3d1b5a77787d"
+    };
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    window.__firebase = {
+      listenProgress: (cb) => { const r = ref(db, "bruh-progress"); onValue(r, snap => cb(snap.val())); },
+      saveProgress:   (data) => set(ref(db, "bruh-progress"), data),
+      listenParent:   (cb) => { const r = ref(db, "bruh-parent"); onValue(r, snap => cb(snap.val())); },
+      saveParent:     (data) => set(ref(db, "bruh-parent"), data),
+    };
+  </script>
+  <style>    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: #000308; }
+    @keyframes pulse { 0%,100%{opacity:.5} 50%{opacity:1} }
+    @keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }
+    @keyframes level-pop { from{opacity:0;transform:scale(0.5)} to{opacity:1;transform:scale(1)} }
+    @keyframes ripple-out { 0%{opacity:1;transform:scale(1)} 100%{opacity:0;transform:scale(1.06)} }
+    @keyframes particle-fly { 0%{transform:translate(0,0) scale(1);opacity:1} 100%{transform:translate(var(--tx),var(--ty)) scale(0);opacity:0} }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script type="text/babel">
+    const { useState, useEffect, useRef } = React;
+
+    const MISSIONS = [
+      { day:1, title:"Ground Control", desc:"Hardware assembly & brain setup. Flash the OS, connect to WiFi, install RPi Connect and Claude Code. Build the physical body of B.R.U.H." },
+      { day:2, title:"Kinematics",     desc:"Mecanum movement & Amazon tour. Watch how warehouse robots move. Use Claude Code to program strafing (sideways sliding) logic." },
+      { day:3, title:"Optic Nerve",    desc:"Computer vision & color tracking. Calibrate the camera and use OpenCV to help the robot see specific colors like Easter eggs." },
+      { day:4, title:"Neural Link",    desc:"Autonomous logic & decision making. Code the Search & Retrieve loop so the robot can find an object without you touching the keys." },
+      { day:5, title:"The Harvest",    desc:"The Grand Autonomous Egg Hunt. The robot goes fully wireless. Document the final run and push your complete portfolio to GitHub." },
+    ];
+
+    const TASKS = [
+      ["Flash Hiwonder MasterPi image to SD card","Connect Pi 5 to home WiFi via hiwonder_wifi_conf.py","Install & sign into Raspberry Pi Connect","Install Claude Code CLI on Pi 5","Create Project-BRUH GitHub repo + first commit"],
+      ["Watch Amazon warehouse robot reference video","Wire and test all 4 Mecanum wheels (X-pattern check)","Write forward/backward movement Python script","Write strafing sideways movement script","Push movement code to GitHub with commit message"],
+      ["Mount and calibrate HD camera on arm","Install OpenCV on Pi 5","Detect a single color using OpenCV","Track Easter egg color in live camera feed","Push vision code to GitHub"],
+      ["Design search & retrieve loop on paper/whiteboard","Code autonomous scan movement sequence","Link vision detection to arm movement","Test full search & retrieve without keyboard input","Push autonomous code to GitHub"],
+      ["Full system test — all hardware & software","Run autonomous Easter egg hunt demo","Record final demo video","Write mission summary README.md","Push complete portfolio to GitHub"],
+    ];
+
+    const TOOLS = ["Claude","BOT","Pi","GitHub","Replit"];
+    const TOOL_COLORS = {
+      Claude:{ bg:"#ff6b35", glow:"#ff6b3580", text:"#ff6b35" },
+      BOT:   { bg:"#4285f4", glow:"#4285f480", text:"#4285f4" },
+      Pi:    { bg:"#00e5ff", glow:"#00e5ff80", text:"#00e5ff" },
+      GitHub:{ bg:"#f5d300", glow:"#f5d30080", text:"#f5d300" },
+      Replit:{ bg:"#f26207", glow:"#f2620780", text:"#f26207" },
+    };
+
+    const LEVELS = [
+      { level:1, title:"Initiate",    minExp:0,    maxExp:200,  color:"#607d8b" },
+      { level:2, title:"Engineer",    minExp:200,  maxExp:500,  color:"#00e5ff" },
+      { level:3, title:"Specialist",  minExp:500,  maxExp:900,  color:"#64ffda" },
+      { level:4, title:"Commander",   minExp:900,  maxExp:1400, color:"#ffff00" },
+      { level:5, title:"Pro-Builder", minExp:1400, maxExp:9999, color:"#ff6e40" },
+    ];
+
+    const EXP = { complete:120, sign:50, tool:30, task:10 };
+    const SESSION_KEY = "bruh-session";
+    const OVERRIDE_SECRET = "password";
+
+    function getLevelInfo(exp) {
+      let cur = LEVELS[0];
+      for (let i = LEVELS.length-1; i >= 0; i--) { if (exp >= LEVELS[i].minExp) { cur = LEVELS[i]; break; } }
+      return cur;
+    }
+
+    function getCardExp(card) {
+      let x = 0;
+      if (card.completed) x += EXP.complete;
+      if (card.signed)    x += EXP.sign;
+      x += (card.tools||[]).length * EXP.tool;
+      x += (card.tasks||[]).filter(Boolean).length * EXP.task;
+      return x;
+    }
+
+    async function hashStr(str) {
+      const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(str));
+      return Array.from(new Uint8Array(buf)).map(b=>b.toString(16).padStart(2,"0")).join("");
+    }
+
+    const local = {
+      get:(k)=>{ try{const v=localStorage.getItem(k);return v?{value:v}:null;}catch(e){return null;} },
+      set:(k,v)=>{ try{localStorage.setItem(k,v);}catch(e){} },
+      del:(k)=>{ try{localStorage.removeItem(k);}catch(e){} },
+    };
+
+    const StarField = () => {
+      const stars = useRef(Array.from({length:80},(_,i)=>({
+        id:i, x:Math.random()*100, y:Math.random()*100,
+        size:Math.random()*2+0.5, delay:Math.random()*4, dur:Math.random()*3+2,
+      }))).current;
+      return (
+        <svg style={{position:"fixed",inset:0,width:"100%",height:"100%",pointerEvents:"none",zIndex:0}}>
+          {stars.map(s=>(
+            <circle key={s.id} cx={`${s.x}%`} cy={`${s.y}%`} r={s.size} fill="#fff">
+              <animate attributeName="opacity" values="0.1;0.8;0.1" dur={`${s.dur}s`} begin={`${s.delay}s`} repeatCount="indefinite"/>
+            </circle>
+          ))}
+        </svg>
+      );
+    };
+
+    const ScanLine = () => (
+      <div style={{position:"fixed",inset:0,pointerEvents:"none",zIndex:1,
+        background:"repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,255,200,0.015) 2px,rgba(0,255,200,0.015) 4px)"}} />
+    );
+
+    function ParticleBurst({x,y,onDone}) {
+      const pts = Array.from({length:24},(_,i)=>({
+        id:i,angle:(i/24)*360,dist:60+Math.random()*60,size:3+Math.random()*4,
+        color:["#00e5ff","#64ffda","#00bfa5","#b2ff59","#ffff00"][Math.floor(Math.random()*5)],
+        dur:0.5+Math.random()*0.4,
+      }));
+      useEffect(()=>{const t=setTimeout(onDone,1200);return()=>clearTimeout(t);},[onDone]);
+      return (
+        <div style={{position:"fixed",left:x,top:y,pointerEvents:"none",zIndex:300}}>
+          {pts.map(p=>{
+            const r=(p.angle*Math.PI)/180;
+            return <div key={p.id} style={{position:"absolute",width:p.size,height:p.size,borderRadius:"50%",background:p.color,boxShadow:`0 0 6px ${p.color}`,animation:`particle-fly ${p.dur}s ease-out forwards`,"--tx":`${Math.cos(r)*p.dist}px`,"--ty":`${Math.sin(r)*p.dist}px`}} />;
+          })}
+        </div>
+      );
+    }
+
+    function RippleEffect({onDone}) {
+      useEffect(()=>{const t=setTimeout(onDone,800);return()=>clearTimeout(t);},[onDone]);
+      return (
+        <div style={{position:"absolute",inset:0,borderRadius:"8px",pointerEvents:"none",zIndex:10,overflow:"hidden"}}>
+          <div style={{position:"absolute",inset:0,borderRadius:"8px",border:"2px solid #00e5ff",animation:"ripple-out 0.8s ease-out forwards"}} />
+        </div>
+      );
+    }
+
+    function XPToast({items,onDone}) {
+      const [vis,setVis]=useState(true);
+      useEffect(()=>{const t=setTimeout(()=>{setVis(false);setTimeout(onDone,400);},2000);return()=>clearTimeout(t);},[onDone]);
+      return (
+        <div style={{position:"fixed",top:"80px",right:"24px",zIndex:100,display:"flex",flexDirection:"column",gap:"8px",opacity:vis?1:0,transition:"opacity 0.4s",pointerEvents:"none"}}>
+          {items.map((item,i)=>(
+            <div key={i} style={{background:"linear-gradient(135deg,#001a2e,#002233)",border:`1px solid ${item.color}66`,borderRadius:"6px",padding:"10px 16px",boxShadow:`0 0 16px ${item.color}44`,display:"flex",alignItems:"center",gap:"10px"}}>
+              <span style={{fontSize:"18px"}}>{item.icon}</span>
+              <div>
+                <div style={{fontSize:"11px",color:item.color,letterSpacing:"2px",fontWeight:"bold"}}>{item.exp>0?"+":""}{item.exp} EXP</div>
+                <div style={{fontSize:"9px",color:"#4dd0e188",letterSpacing:"1px"}}>{item.label}</div>
+              </div>
+            </div>
+          ))}
+        </div>
+      );
+    }
+
+    function LevelUpBanner({levelInfo,onDone}) {
+      const [vis,setVis]=useState(true);
+      useEffect(()=>{const t=setTimeout(()=>{setVis(false);setTimeout(onDone,500);},3000);return()=>clearTimeout(t);},[onDone]);
+      return (
+        <div style={{position:"fixed",inset:0,zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",background:"rgba(0,0,0,0.7)",opacity:vis?1:0,transition:"opacity 0.5s",pointerEvents:vis?"auto":"none"}}>
+          <div style={{textAlign:"center",animation:"level-pop 0.5s cubic-bezier(0.175,0.885,0.32,1.275) forwards"}}>
+            <div style={{fontSize:"13px",letterSpacing:"6px",color:levelInfo.color,marginBottom:"12px"}}>◈ Level Up ◈</div>
+            <div style={{fontSize:"clamp(36px,8vw,64px)",fontWeight:"900",color:levelInfo.color,letterSpacing:"4px",textTransform:"uppercase",textShadow:`0 0 30px ${levelInfo.color},0 0 60px ${levelInfo.color}66`}}>{levelInfo.title}</div>
+            <div style={{fontSize:"14px",color:"#4dd0e1",letterSpacing:"3px",marginTop:"8px"}}>LEVEL {levelInfo.level} UNLOCKED</div>
+          </div>
+        </div>
+      );
+    }
+
+    function SaveIndicator({status}) {
+      const m={saving:{color:"#ffab40",icon:"↑",label:"SAVING..."},saved:{color:"#64ffda",icon:"✓",label:"SAVED"},error:{color:"#ff5252",icon:"✗",label:"SAVE ERROR"},idle:{color:"#1a3a4a",icon:"◈",label:"SYNCED"}};
+      const c=m[status]||m.idle;
+      return (
+        <div style={{position:"fixed",bottom:"16px",right:"16px",zIndex:50,background:"#060e1a",border:`1px solid ${c.color}44`,borderRadius:"6px",padding:"6px 12px",display:"flex",alignItems:"center",gap:"6px"}}>
+          <span style={{color:c.color,fontSize:"12px"}}>{c.icon}</span>
+          <span style={{fontSize:"9px",color:c.color,letterSpacing:"2px"}}>{c.label}</span>
+        </div>
+      );
+    }
+
+    function RoleScreen({onParent,onGuest,parentExists}) {
+      const [mode,setMode]=useState(null);
+      const [user,setUser]=useState("");
+      const [pass,setPass]=useState("");
+      const [pass2,setPass2]=useState("");
+      const [err,setErr]=useState("");
+      const [loading,setLoading]=useState(false);
+      const [ovPass,setOvPass]=useState("");
+      const [ovErr,setOvErr]=useState("");
+      const [ovOk,setOvOk]=useState(false);
+
+      const inp={width:"100%",padding:"10px 14px",background:"#0a1628",border:"1px solid #1a3a4a",borderRadius:"6px",color:"#e0f7fa",fontSize:"13px",fontFamily:"'Courier New',monospace",letterSpacing:"1px",outline:"none",boxSizing:"border-box"};
+      const btn=(col)=>{const c=col||"#00e5ff";return{width:"100%",padding:"11px",borderRadius:"6px",cursor:"pointer",fontFamily:"'Courier New',monospace",fontSize:"11px",letterSpacing:"3px",textTransform:"uppercase",fontWeight:"bold",transition:"all 0.2s",border:`1px solid ${c}66`,background:`${c}22`,color:c,boxShadow:`0 0 12px ${c}22`};};
+      const reset=()=>{setMode(null);setErr("");setUser("");setPass("");setPass2("");setOvPass("");setOvErr("");setOvOk(false);};
+
+      const handleRegister=async()=>{
+        setErr("");
+        if(!user.trim()||!pass.trim()) return setErr("Username and password required.");
+        if(pass!==pass2) return setErr("Passwords do not match.");
+        setLoading(true);
+        const hashed=await hashStr(pass);
+        await window.__firebase.saveParent({username:user.trim(),hash:hashed});
+        onParent(user.trim());
+        setLoading(false);
+      };
+
+      const handleLogin=async()=>{
+        setErr("");
+        if(!user.trim()||!pass.trim()) return setErr("Enter username and password.");
+        setLoading(true);
+        const res=await new Promise(resolve=>{ window.__firebase.listenParent(data=>resolve(data)); });
+        if(!res){setErr("No parent account found.");setLoading(false);return;}
+        const hashed=await hashStr(pass);
+        if(user.trim()!==res.username||hashed!==res.hash){setErr("Incorrect username or password.");setLoading(false);return;}
+        onParent(res.username);
+        setLoading(false);
+      };
+
+      return (
+        <div style={{minHeight:"100vh",background:"radial-gradient(ellipse at 20% 20%,#0a0f1e 0%,#050810 60%,#000308 100%)",fontFamily:"'Courier New',monospace",color:"#e0f7fa",display:"flex",alignItems:"center",justifyContent:"center",padding:"20px",position:"relative"}}>
+          <StarField/><ScanLine/>
+          <div style={{position:"relative",zIndex:2,width:"100%",maxWidth:"400px"}}>
+            <div style={{textAlign:"center",marginBottom:"32px"}}>
+              <div style={{fontSize:"10px",letterSpacing:"4px",color:"#00e5ff",marginBottom:"12px"}}>⬡ AI BOOTCAMP // SECTOR 7G ⬡</div>
+              <h1 style={{fontSize:"28px",fontWeight:"900",letterSpacing:"3px",background:"linear-gradient(90deg,#00e5ff,#64ffda)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",margin:"0 0 6px"}}>MISSION CONTROL</h1>
+              <p style={{fontSize:"10px",letterSpacing:"3px",color:"#4dd0e166",margin:0}}>SELECT ACCESS LEVEL</p>
+            </div>
+            {!mode&&(
+              <div style={{display:"flex",flexDirection:"column",gap:"12px"}}>
+                <button onClick={()=>setMode(parentExists?"login":"register")} style={btn("#00e5ff")}>{parentExists?"⬡ Parent Sign In":"⬡ Register as Parent"}</button>
+                <button onClick={onGuest} style={btn("#4dd0e1")}>◈ Continue as Builder (No Sign In)</button>
+                {parentExists&&<button onClick={()=>setMode("override")} style={btn("#607d8b")}>+ Override Parent Account</button>}
+              </div>
+            )}
+            {mode&&(
+              <div style={{background:"linear-gradient(135deg,#060e1a,#080d18)",border:"1px solid #00e5ff33",borderRadius:"10px",padding:"24px",display:"flex",flexDirection:"column",gap:"14px"}}>
+                {mode==="override"&&!ovOk&&(
+                  <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+                    <div style={{fontSize:"11px",letterSpacing:"3px",color:"#ffab40"}}>▸ OVERRIDE ACCOUNT</div>
+                    <div><div style={{fontSize:"9px",letterSpacing:"2px",color:"#4dd0e155",marginBottom:"5px"}}>SECRET PASSWORD</div><input value={ovPass} onChange={e=>setOvPass(e.target.value)} type="password" placeholder="••••••••" style={inp}/></div>
+                    {ovErr&&<div style={{fontSize:"10px",color:"#ff5252",padding:"8px 10px",background:"#ff525211",border:"1px solid #ff525233",borderRadius:"4px"}}>⚠ {ovErr}</div>}
+                    <button onClick={()=>{if(ovPass===OVERRIDE_SECRET){setOvOk(true);setOvErr("");}else setOvErr("Incorrect secret password.");}} style={btn("#ffab40")}>Verify</button>
+                    <button onClick={reset} style={{background:"transparent",border:"none",color:"#4dd0e155",fontSize:"10px",letterSpacing:"2px",cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>← Back</button>
+                  </div>
+                )}
+                {(mode!=="override"||ovOk)&&(
+                  <div style={{display:"flex",flexDirection:"column",gap:"14px"}}>
+                    <div style={{fontSize:"11px",letterSpacing:"3px",color:"#00e5ff"}}>{(mode==="register"||mode==="override")?"▸ CREATE PARENT ACCOUNT":"▸ PARENT SIGN IN"}</div>
+                    {mode==="override"&&<div style={{fontSize:"9px",color:"#ffab40",padding:"6px 10px",background:"#ffab4011",border:"1px solid #ffab4033",borderRadius:"4px"}}>⚠ Override active — this will replace the existing account.</div>}
+                    <div><div style={{fontSize:"9px",letterSpacing:"2px",color:"#4dd0e155",marginBottom:"5px"}}>USERNAME</div><input value={user} onChange={e=>setUser(e.target.value)} placeholder="username" style={inp}/></div>
+                    <div><div style={{fontSize:"9px",letterSpacing:"2px",color:"#4dd0e155",marginBottom:"5px"}}>PASSWORD</div><input value={pass} onChange={e=>setPass(e.target.value)} type="password" placeholder="••••••••" style={inp}/></div>
+                    {(mode==="register"||mode==="override")&&<div><div style={{fontSize:"9px",letterSpacing:"2px",color:"#4dd0e155",marginBottom:"5px"}}>CONFIRM PASSWORD</div><input value={pass2} onChange={e=>setPass2(e.target.value)} type="password" placeholder="••••••••" style={inp}/></div>}
+                    {err&&<div style={{fontSize:"10px",color:"#ff5252",padding:"8px 10px",background:"#ff525211",border:"1px solid #ff525233",borderRadius:"4px"}}>⚠ {err}</div>}
+                    <button onClick={mode==="login"?handleLogin:handleRegister} disabled={loading} style={btn("#00e5ff")}>{loading?"...":(mode==="register"||mode==="override")?"Create Account":"Sign In"}</button>
+                    <button onClick={reset} style={{background:"transparent",border:"none",color:"#4dd0e155",fontSize:"10px",letterSpacing:"2px",cursor:"pointer",fontFamily:"inherit",textAlign:"center"}}>← Back</button>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    }
+
+    function LevelPanel({totalExp,levelInfo,levelProgress,expInLevel,expNeeded}) {
+      return (
+        <div style={{maxWidth:"700px",margin:"0 auto",background:"linear-gradient(135deg,#060e1a,#080d18)",border:`1px solid ${levelInfo.color}44`,borderRadius:"10px",padding:"20px",boxShadow:`0 0 24px ${levelInfo.color}22`}}>
+          <div style={{display:"flex",alignItems:"center",gap:"20px",marginBottom:"16px"}}>
+            <div style={{width:"64px",height:"64px",borderRadius:"50%",flexShrink:0,border:`2px solid ${levelInfo.color}`,background:`radial-gradient(circle,${levelInfo.color}22,transparent)`,boxShadow:`0 0 20px ${levelInfo.color}66`,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center"}}>
+              <div style={{fontSize:"20px",fontWeight:"900",color:levelInfo.color,lineHeight:1}}>{levelInfo.level}</div>
+              <div style={{fontSize:"7px",letterSpacing:"1px",color:`${levelInfo.color}88`}}>LVL</div>
+            </div>
+            <div style={{flex:1,textAlign:"left"}}>
+              <div style={{fontSize:"9px",letterSpacing:"3px",color:"#4dd0e188",marginBottom:"2px"}}>CURRENT RANK</div>
+              <div style={{fontSize:"20px",fontWeight:"900",letterSpacing:"2px",color:levelInfo.color,textTransform:"uppercase",textShadow:`0 0 10px ${levelInfo.color}66`}}>{levelInfo.title}</div>
+              <div style={{fontSize:"10px",color:"#4dd0e166",letterSpacing:"1px",marginTop:"2px"}}>{totalExp.toLocaleString()} TOTAL EXP</div>
+            </div>
+            <div style={{textAlign:"right",flexShrink:0}}>
+              <div style={{fontSize:"9px",letterSpacing:"2px",color:"#4dd0e155"}}>NEXT LEVEL</div>
+              <div style={{fontSize:"16px",fontWeight:"bold",color:levelInfo.color}}>{levelInfo.level<LEVELS.length?`${(expNeeded-expInLevel).toLocaleString()} EXP`:"MAX"}</div>
+            </div>
+          </div>
+          <div style={{marginBottom:"16px"}}>
+            <div style={{display:"flex",justifyContent:"space-between",fontSize:"9px",color:"#4dd0e166",letterSpacing:"2px",marginBottom:"6px"}}>
+              <span>▸ EXPERIENCE</span><span>{expInLevel} / {expNeeded} EXP</span>
+            </div>
+            <div style={{height:"8px",background:"#0a1628",borderRadius:"4px",border:`1px solid ${levelInfo.color}33`,overflow:"hidden"}}>
+              <div style={{height:"100%",width:`${levelProgress}%`,background:`linear-gradient(90deg,${levelInfo.color}88,${levelInfo.color})`,borderRadius:"4px",transition:"width 0.8s cubic-bezier(0.4,0,0.2,1)",boxShadow:`0 0 8px ${levelInfo.color}88`}} />
+            </div>
+          </div>
+          <div style={{display:"flex",gap:"8px",marginBottom:"14px"}}>
+            {[{icon:"⚡",label:"Mission",exp:EXP.complete,color:"#64ffda"},{icon:"✦",label:"Signature",exp:EXP.sign,color:"#00e5ff"},{icon:"🛠",label:"Per Tool",exp:EXP.tool,color:"#ff6b35"}].map(r=>(
+              <div key={r.label} style={{flex:1,background:"#0a1628",border:`1px solid ${r.color}33`,borderRadius:"6px",padding:"8px 6px",textAlign:"center"}}>
+                <div style={{fontSize:"14px"}}>{r.icon}</div>
+                <div style={{fontSize:"11px",color:r.color,fontWeight:"bold"}}>+{r.exp}</div>
+                <div style={{fontSize:"8px",color:"#4dd0e166",letterSpacing:"1px"}}>{r.label}</div>
+              </div>
+            ))}
+          </div>
+          <div style={{display:"flex",gap:"4px",alignItems:"flex-end"}}>
+            {LEVELS.map(lv=>{
+              const active=totalExp>=lv.minExp,current=lv.level===levelInfo.level;
+              return (
+                <div key={lv.level} style={{flex:1,textAlign:"center"}}>
+                  <div style={{height:`${10+lv.level*8}px`,background:active?lv.color:"#1a3a4a",borderRadius:"2px 2px 0 0",boxShadow:current?`0 0 8px ${lv.color}`:"none",transition:"all 0.3s",animation:current?"pulse 1.5s ease-in-out infinite":"none"}} />
+                  <div style={{fontSize:"8px",color:active?lv.color:"#1a3a4a",marginTop:"3px"}}>{lv.level}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      );
+    }
+
+    function MissionCard({card,taskList,onToggle,onSign,onSetTool,onSetTask,isParent}) {
+      const [ripple,setRipple]=useState(false);
+      const [burst,setBurst]=useState(null);
+      const cardRef=useRef(null);
+      const tools=card.tools||[];
+      const tasks=card.tasks||taskList.map(()=>false);
+      const cardExp=getCardExp({...card,tasks});
+
+      const handleToggle=()=>{
+        if(!card.completed){
+          setRipple(true);
+          const r=cardRef.current&&cardRef.current.getBoundingClientRect();
+          if(r) setBurst({x:r.left+r.width/2,y:r.top+r.height/2});
+        }
+        onToggle();
+      };
+
+      const border=card.completed?"1px solid #00e5ff66":"1px solid #1a3a4a";
+      const bg=card.completed?"linear-gradient(135deg,#001a2e,#002233)":"linear-gradient(135deg,#060e1a,#080d18)";
+      const glow=card.completed?"0 0 20px #00e5ff22,inset 0 0 20px #00e5ff08":"0 2px 8px #00000066";
+
+      return (
+        <React.Fragment>
+          {burst&&<ParticleBurst x={burst.x} y={burst.y} onDone={()=>setBurst(null)} />}
+          <div ref={cardRef} style={{background:bg,border,borderRadius:"8px",padding:"18px",boxShadow:glow,transition:"all 0.3s ease",position:"relative",overflow:"hidden"}}>
+            {ripple&&<RippleEffect onDone={()=>setRipple(false)} />}
+            <div style={{position:"absolute",top:0,right:0,width:"40px",height:"40px",borderTop:card.completed?"2px solid #00e5ff66":"2px solid #1a3a4a44",borderRight:card.completed?"2px solid #00e5ff66":"2px solid #1a3a4a44",borderTopRightRadius:"8px"}} />
+            <div style={{position:"absolute",top:"10px",right:"10px",background:cardExp>0?"#00e5ff22":"#1a3a4a",border:`1px solid ${cardExp>0?"#00e5ff66":"#1a3a4a"}`,borderRadius:"4px",padding:"2px 7px",fontSize:"9px",color:cardExp>0?"#00e5ff":"#2a5a7a",letterSpacing:"1px",fontWeight:"bold"}}>
+              {cardExp>0?`+${cardExp} EXP`:"0 EXP"}
+            </div>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:"12px",paddingRight:"60px"}}>
+              <div>
+                <div style={{fontSize:"9px",letterSpacing:"3px",color:"#4dd0e188",textTransform:"uppercase",marginBottom:"4px"}}>DAY {String(card.day).padStart(2,"0")}</div>
+                <div style={{fontSize:"15px",fontWeight:"900",letterSpacing:"1px",color:card.completed?"#64ffda":"#7fdbff",textTransform:"uppercase",textShadow:card.completed?"0 0 10px #64ffda66":"none",transition:"all 0.3s"}}>{card.title}</div>
+              </div>
+              <button onClick={handleToggle} style={{width:"36px",height:"36px",borderRadius:"50%",flexShrink:0,border:card.completed?"2px solid #00e5ff":"2px solid #1a4a5a",background:card.completed?"radial-gradient(circle,#00e5ff33,#00bfa511)":"transparent",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",fontSize:"16px",color:card.completed?"#00e5ff":"#4dd0e144",boxShadow:card.completed?"0 0 14px #00e5ff88":"none",transition:"all 0.2s"}}>
+                {card.completed?"✓":"○"}
+              </button>
+            </div>
+            <p style={{fontSize:"11px",color:"#4dd0e188",margin:"0 0 14px",lineHeight:"1.6"}}>{card.desc}</p>
+
+            <div style={{marginBottom:"12px"}}>
+              <div style={{fontSize:"9px",letterSpacing:"2px",color:"#4dd0e155",marginBottom:"6px"}}>▸ TASKS <span style={{color:"#4dd0e133"}}>({tasks.filter(Boolean).length}/{taskList.length} complete · +{tasks.filter(Boolean).length*EXP.task} EXP)</span></div>
+              {taskList.map((t,i)=>(
+                <div key={i} onClick={()=>!isParent&&onSetTask(i)} style={{display:"flex",alignItems:"flex-start",gap:"8px",padding:"4px 0",cursor:isParent?"default":"pointer"}}>
+                  <div style={{width:"12px",height:"12px",borderRadius:"2px",border:tasks[i]?"1px solid #00e5ff":"1px solid #1a3a4a",background:tasks[i]?"#00e5ff22":"transparent",flexShrink:0,marginTop:"2px",display:"flex",alignItems:"center",justifyContent:"center",transition:"all 0.2s"}}>
+                    {tasks[i]&&<span style={{fontSize:"8px",color:"#00e5ff"}}>✓</span>}
+                  </div>
+                  <span style={{fontSize:"10px",color:tasks[i]?"#4dd0e155":"#4dd0e1bb",lineHeight:"1.5",textDecoration:tasks[i]?"line-through":"none",transition:"all 0.2s"}}>{t}</span>
+                </div>
+              ))}
+            </div>
+
+            <div style={{marginBottom:"12px"}}>
+              <div style={{fontSize:"9px",letterSpacing:"2px",color:"#4dd0e155",marginBottom:"6px"}}>▸ TOOLS USED <span style={{color:"#4dd0e133"}}>(select all that apply)</span></div>
+              <div style={{display:"flex",gap:"5px",flexWrap:"wrap"}}>
+                {TOOLS.map(t=>{
+                  const tc=TOOL_COLORS[t],active=tools.includes(t);
+                  return (
+                    <button key={t} onClick={()=>onSetTool(t)} style={{flex:"1 1 auto",minWidth:"52px",padding:"6px 4px",borderRadius:"4px",border:active?`1px solid ${tc.bg}`:"1px solid #1a3a4a",background:active?`${tc.bg}22`:"transparent",color:active?tc.text:"#4dd0e144",fontSize:"10px",letterSpacing:"1px",cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase",boxShadow:active?`0 0 10px ${tc.glow}`:"none",transition:"all 0.2s",fontWeight:active?"bold":"normal",position:"relative"}}>
+                      {active&&<span style={{position:"absolute",top:"-5px",right:"-5px",width:"10px",height:"10px",borderRadius:"50%",background:tc.bg,fontSize:"7px",display:"flex",alignItems:"center",justifyContent:"center",color:"#000",fontWeight:"bold"}}>✓</span>}
+                      {t}
+                    </button>
+                  );
+                })}
+              </div>
+              {tools.length>0&&<div style={{marginTop:"6px",fontSize:"9px",color:"#4dd0e155",letterSpacing:"1px"}}>{tools.length} tool{tools.length>1?"s":""} · +{tools.length*EXP.tool} EXP</div>}
+            </div>
+
+            <div>
+              <div style={{fontSize:"9px",letterSpacing:"2px",color:"#4dd0e155",marginBottom:"6px"}}>▸ PARENT AUTHORIZATION</div>
+              {card.signed?(
+                <div style={{display:"flex",alignItems:"center",gap:"8px",padding:"8px 12px",background:"#001a1a",border:"1px solid #00e5ff44",borderRadius:"4px"}}>
+                  <span style={{fontSize:"16px"}}>✦</span>
+                  <span style={{fontSize:"10px",color:"#00e5ff",letterSpacing:"2px"}}>AUTHORIZED</span>
+                  {isParent?(
+                    <button onClick={onSign} style={{marginLeft:"auto",background:"transparent",border:"1px solid #ff525233",borderRadius:"4px",padding:"2px 8px",color:"#ff5252aa",fontSize:"9px",letterSpacing:"1px",cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase"}}
+                      onMouseEnter={e=>{e.currentTarget.style.borderColor="#ff5252";e.currentTarget.style.color="#ff5252";e.currentTarget.style.background="#ff525222";}}
+                      onMouseLeave={e=>{e.currentTarget.style.borderColor="#ff525233";e.currentTarget.style.color="#ff5252aa";e.currentTarget.style.background="transparent";}}>
+                      ✕ unsign
+                    </button>
+                  ):<span style={{marginLeft:"auto",fontSize:"9px",color:"#4dd0e166"}}>VERIFIED</span>}
+                </div>
+              ):isParent?(
+                <button onClick={onSign} style={{width:"100%",padding:"9px",background:"transparent",border:"1px dashed #00e5ff55",borderRadius:"4px",color:"#00e5ffaa",fontSize:"10px",letterSpacing:"2px",cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase"}}
+                  onMouseEnter={e=>{e.currentTarget.style.background="#00e5ff11";}}
+                  onMouseLeave={e=>{e.currentTarget.style.background="transparent";}}>
+                  ✦ Sign as Parent
+                </button>
+              ):(
+                <div style={{padding:"9px",border:"1px dashed #1a3a4a",borderRadius:"4px",color:"#2a5a7a",fontSize:"10px",letterSpacing:"2px",textAlign:"center",textTransform:"uppercase"}}>🔒 Parent sign-in required</div>
+              )}
+            </div>
+            {card.completed&&<div style={{position:"absolute",bottom:0,left:0,right:0,height:"3px",background:"linear-gradient(90deg,transparent,#00e5ff,#64ffda,transparent)",animation:"pulse 2s ease-in-out infinite"}} />}
+          </div>
+        </React.Fragment>
+      );
+    }
+
+    function App() {
+      const [session,setSession]=useState(null);
+      const [parentName,setParentName]=useState("");
+      const [parentExists,setParentExists]=useState(false);
+      const [cards,setCards]=useState(()=>MISSIONS.map(m=>({...m,completed:false,signed:false,tools:[],tasks:TASKS[m.day-1].map(()=>false)})));
+      const [toasts,setToasts]=useState([]);
+      const [levelUpInfo,setLevelUpInfo]=useState(null);
+      const [prevLevel,setPrevLevel]=useState(1);
+      const [saveStatus,setSaveStatus]=useState("idle");
+      const [fbReady,setFbReady]=useState(false);
+      const [isLoading,setIsLoading]=useState(true);
+      const saveTimer=useRef(null);
+      const isMounted=useRef(false);
+      const isRemote=useRef(false);
+
+      useEffect(()=>{
+        const interval=setInterval(()=>{ if(window.__firebase){setFbReady(true);clearInterval(interval);} },100);
+        return()=>clearInterval(interval);
+      },[]);
+
+      useEffect(()=>{
+        if(!fbReady) return;
+        window.__firebase.listenParent(data=>{ if(data&&data.username) setParentExists(true); });
+        const s=local.get(SESSION_KEY);
+        if(s){try{const d=JSON.parse(s.value);if(d.role==="parent"){setSession("parent");setParentName(d.name||"");}else if(d.role==="guest")setSession("guest");}catch(e){}}
+      },[fbReady]);
+
+      useEffect(()=>{
+        if(!fbReady) return;
+        window.__firebase.listenProgress(data=>{
+          if(data){
+            const saved=Array.isArray(data)?data:Object.values(data);
+            isRemote.current=true;
+            setCards(MISSIONS.map(m=>{
+              const c=saved.find(x=>x.day===m.day);
+              return c?{...m,...c,tasks:c.tasks||TASKS[m.day-1].map(()=>false)}:{...m,completed:false,signed:false,tools:[],tasks:TASKS[m.day-1].map(()=>false)};
+            }));
+            if(isLoading){
+              const exp=saved.reduce((sum,c)=>{let x=0;if(c.completed)x+=EXP.complete;if(c.signed)x+=EXP.sign;x+=(c.tools?c.tools.length:0)*EXP.tool;x+=(c.tasks?c.tasks.filter(Boolean).length:0)*EXP.task;return sum+x;},0);
+              setPrevLevel(getLevelInfo(exp).level);
+              setIsLoading(false);
+            }
+          } else { setIsLoading(false); }
+        });
+      },[fbReady]);
+
+      useEffect(()=>{
+        if(!isMounted.current){isMounted.current=true;return;}
+        if(isLoading) return;
+        if(isRemote.current){isRemote.current=false;return;}
+        setSaveStatus("saving");
+        if(saveTimer.current)clearTimeout(saveTimer.current);
+        saveTimer.current=setTimeout(async()=>{
+          try{
+            await window.__firebase.saveProgress(cards.map(c=>({day:c.day,completed:c.completed,signed:c.signed,tools:c.tools,tasks:c.tasks})));
+            setSaveStatus("saved");
+            setTimeout(()=>setSaveStatus("idle"),2000);
+          }catch(e){setSaveStatus("error");}
+        },600);
+      },[cards]);
+
+      const totalExp=cards.reduce((s,c)=>s+getCardExp(c),0);
+      const levelInfo=getLevelInfo(totalExp);
+      const completed=cards.filter(c=>c.completed).length;
+      const progress=Math.round((completed/5)*100);
+      const expInLevel=totalExp-levelInfo.minExp;
+      const expNeeded=levelInfo.maxExp===9999?500:levelInfo.maxExp-levelInfo.minExp;
+      const levelProgress=Math.min(100,Math.round((expInLevel/expNeeded)*100));
+
+      const showToast=(items)=>setToasts(t=>[...t,{id:Date.now()+Math.random(),items}]);
+
+      useEffect(()=>{
+        if(levelInfo.level>prevLevel){setLevelUpInfo(levelInfo);setPrevLevel(levelInfo.level);}
+      },[levelInfo.level]);
+
+      const handleParentLogin=(name)=>{setSession("parent");setParentName(name);setParentExists(true);local.set(SESSION_KEY,JSON.stringify({role:"parent",name}));};
+      const handleGuest=()=>{setSession("guest");local.set(SESSION_KEY,JSON.stringify({role:"guest"}));};
+      const handleSignOut=()=>{setSession(null);local.del(SESSION_KEY);};
+
+      const handleComplete=(idx)=>{
+        const was=cards[idx].completed;
+        setCards(cards.map((c,i)=>i===idx?{...c,completed:!c.completed}:c));
+        showToast([was?{exp:-EXP.complete,label:"Mission Undone",icon:"↩",color:"#ff5252"}:{exp:EXP.complete,label:"Mission Complete",icon:"⚡",color:"#64ffda"}]);
+      };
+      const handleSign=(idx)=>{
+        if(session!=="parent")return;
+        const was=cards[idx].signed;
+        setCards(cards.map((c,i)=>i===idx?{...c,signed:!c.signed}:c));
+        showToast([was?{exp:-EXP.sign,label:"Signature Removed",icon:"↩",color:"#ff5252"}:{exp:EXP.sign,label:"Mission Authorized",icon:"✦",color:"#00e5ff"}]);
+      };
+      const handleTool=(idx,tool)=>{
+        const had=(cards[idx].tools||[]).includes(tool);
+        setCards(cards.map((c,i)=>i===idx?{...c,tools:had?(c.tools||[]).filter(t=>t!==tool):[...(c.tools||[]),tool]}:c));
+        showToast([had?{exp:-EXP.tool,label:`Tool Removed: ${tool}`,icon:"🛠",color:"#ff5252"}:{exp:EXP.tool,label:`Tool Logged: ${tool}`,icon:"🛠",color:TOOL_COLORS[tool].text}]);
+      };
+      const handleTask=(idx,ti)=>{
+        setCards(cards.map((c,i)=>{if(i!==idx)return c;const t=[...(c.tasks||TASKS[i].map(()=>false))];t[ti]=!t[ti];return{...c,tasks:t};}));
+      };
+
+      if(!fbReady) return (
+        <div style={{minHeight:"100vh",background:"radial-gradient(ellipse at 20% 20%,#0a0f1e,#050810,#000308)",display:"flex",alignItems:"center",justifyContent:"center",fontFamily:"'Courier New',monospace",color:"#00e5ff"}}>
+          <div style={{textAlign:"center"}}>
+            <div style={{fontSize:"12px",letterSpacing:"4px",marginBottom:"16px"}}>CONNECTING TO DATABASE...</div>
+            <div style={{width:"40px",height:"40px",margin:"0 auto",border:"2px solid #00e5ff33",borderTop:"2px solid #00e5ff",borderRadius:"50%",animation:"spin 1s linear infinite"}} />
+          </div>
+        </div>
+      );
+
+      if(!session) return <RoleScreen onParent={handleParentLogin} onGuest={handleGuest} parentExists={parentExists}/>;
+      const isParent=session==="parent";
+
+      return (
+        <div style={{minHeight:"100vh",background:"radial-gradient(ellipse at 20% 20%,#0a0f1e 0%,#050810 60%,#000308 100%)",fontFamily:"'Courier New',monospace",color:"#e0f7fa",padding:"20px",position:"relative",overflowX:"hidden"}}>
+          <StarField/><ScanLine/>
+          {toasts.map(t=><XPToast key={t.id} items={t.items} onDone={()=>setToasts(ts=>ts.filter(x=>x.id!==t.id))} />)}
+          {levelUpInfo&&<LevelUpBanner levelInfo={levelUpInfo} onDone={()=>setLevelUpInfo(null)} />}
+          <SaveIndicator status={saveStatus}/>
+
+          <div style={{position:"fixed",top:"16px",left:"16px",zIndex:50,display:"flex",alignItems:"center",gap:"8px"}}>
+            <div style={{background:"#060e1a",border:`1px solid ${isParent?"#00e5ff44":"#1a3a4a"}`,borderRadius:"6px",padding:"6px 12px",display:"flex",alignItems:"center",gap:"6px"}}>
+              <span style={{fontSize:"12px"}}>{isParent?"✦":"◈"}</span>
+              <span style={{fontSize:"9px",color:isParent?"#00e5ff":"#4dd0e166",letterSpacing:"2px"}}>{isParent?`PARENT: ${parentName.toUpperCase()}`:"BUILDER MODE"}</span>
+            </div>
+            <button onClick={handleSignOut} style={{background:"transparent",border:"1px solid #1a3a4a",borderRadius:"6px",padding:"6px 10px",color:"#4dd0e155",fontSize:"9px",letterSpacing:"1px",cursor:"pointer",fontFamily:"inherit",textTransform:"uppercase"}}
+              onMouseEnter={e=>{e.currentTarget.style.borderColor="#ff525266";e.currentTarget.style.color="#ff5252";}}
+              onMouseLeave={e=>{e.currentTarget.style.borderColor="#1a3a4a";e.currentTarget.style.color="#4dd0e155";}}>
+              ← exit
+            </button>
+          </div>
+
+          <div style={{textAlign:"center",marginBottom:"28px",position:"relative",zIndex:2,paddingTop:"30px"}}>
+            <div style={{display:"inline-block",background:"linear-gradient(135deg,#00e5ff22,#00bfa522)",border:"1px solid #00e5ff44",borderRadius:"4px",padding:"4px 14px",fontSize:"10px",letterSpacing:"4px",color:"#00e5ff",marginBottom:"12px",textTransform:"uppercase"}}>⬡ AI Bootcamp // Sector 7G ⬡</div>
+            <h1 style={{fontSize:"clamp(22px,5vw,42px)",fontWeight:"900",letterSpacing:"3px",textTransform:"uppercase",background:"linear-gradient(90deg,#00e5ff,#00bfa5,#64ffda)",WebkitBackgroundClip:"text",WebkitTextFillColor:"transparent",margin:"0 0 4px",filter:"drop-shadow(0 0 20px #00e5ff66)"}}>Project B.R.U.H.</h1>
+            <p style={{fontSize:"11px",letterSpacing:"6px",color:"#4dd0e188",textTransform:"uppercase",margin:"0 0 24px"}}>5-Day Mission Protocol · Bot Rarely Understands Humans</p>
+            <div style={{maxWidth:"600px",margin:"0 auto 20px"}}>
+              <div style={{display:"flex",justifyContent:"space-between",fontSize:"11px",color:"#4dd0e1",letterSpacing:"2px",marginBottom:"8px"}}>
+                <span>▸ MISSION PROGRESS</span><span>{completed}/5 COMPLETE · {progress}%</span>
+              </div>
+              <div style={{height:"10px",background:"#0a1628",borderRadius:"6px",border:"1px solid #00e5ff33",overflow:"hidden"}}>
+                <div style={{height:"100%",width:`${progress}%`,background:"linear-gradient(90deg,#00bfa5,#00e5ff,#64ffda)",borderRadius:"6px",transition:"width 0.6s cubic-bezier(0.4,0,0.2,1)",boxShadow:"0 0 12px #00e5ff88"}} />
+              </div>
+            </div>
+            <LevelPanel totalExp={totalExp} levelInfo={levelInfo} levelProgress={levelProgress} expInLevel={expInLevel} expNeeded={expNeeded}/>
+          </div>
+
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(290px,1fr))",gap:"16px",maxWidth:"1200px",margin:"0 auto",position:"relative",zIndex:2}}>
+            {cards.map((card,idx)=>(
+              <MissionCard key={card.day} card={card} taskList={TASKS[idx]} isParent={isParent}
+                onToggle={()=>handleComplete(idx)}
+                onSign={()=>handleSign(idx)}
+                onSetTool={t=>handleTool(idx,t)}
+                onSetTask={ti=>handleTask(idx,ti)}
+              />
+            ))}
+          </div>
+          <div style={{textAlign:"center",marginTop:"40px",position:"relative",zIndex:2}}>
+            <div style={{fontSize:"10px",letterSpacing:"3px",color:"#1a3a4a"}}>◈ SYSTEM ONLINE · FIREBASE SYNC · BUILD v5.0 ◈</div>
+          </div>
+        </div>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+  </script>
+</body>
+</html>
