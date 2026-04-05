@@ -22,10 +22,10 @@
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
     window.__firebase = {
-      listenProgress: (cb) => { const r = ref(db, "bruh-progress"); onValue(r, snap => cb(snap.val())); },
-      saveProgress:   (data) => set(ref(db, "bruh-progress"), data),
-      listenParent:   (cb) => { const r = ref(db, "bruh-parent"); onValue(r, snap => cb(snap.val())); },
-      saveParent:     (data) => set(ref(db, "bruh-parent"), data),
+      listenProgress: (cb) => { const r = ref(db, "projects/bruh/progress"); onValue(r, snap => cb(snap.val())); },
+      saveProgress:   (data) => set(ref(db, "projects/bruh/progress"), data),
+      listenParent:   (cb) => { const r = ref(db, "projects/bruh/parent"); onValue(r, snap => cb(snap.val())); },
+      saveParent:     (data) => set(ref(db, "projects/bruh/parent"), data),
     };
   </script>
   <style>    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
